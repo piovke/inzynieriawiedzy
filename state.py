@@ -40,36 +40,68 @@ class BlocksState:
 
     # Metoda zwracająca tablicę wszystkich wolnych klocków (można je podnieść).
     def get_free_blocks(self):
-        supported_blocks = set(self.state)
-        return [i for i in range(1, self.n + 1) if i not in supported_blocks]
+        supporting_blocks = set(self.state)
+        return [i for i in range(1, self.n + 1) if i not in supporting_blocks]
 
 
     # Metoda zwracająca tablicę wszystkich możliwych ruchów na układzie.
-    def get_possible_moves(self):
+    def get_possible_moves(self, third_move=False):
         moves = []
         free_blocks = self.get_free_blocks()
 
-        # Sprawdzamy każdy wolny klocek
-        for block in free_blocks:
-            support = self.state[block - 1]
+        # 3 dostępne ruchy
+        if third_move:
+            for block in free_blocks:
+                support = self.state[block - 1]
+                # Klocki ze stołu można przełożyć tylko na inne klocki
+                if support == 0:
+                    for target in free_blocks:
+                        if target != block:
+                            new_state_list = list(self.state)
+                            new_state_list[block - 1] = target
 
-            # Jeśli klocek leży na innym klocku, można przełożyć go na stół
-            if support != 0:
-                new_state_list = list(self.state)
-                new_state_list[block - 1] = 0
+                            new_state_obj = BlocksState(new_state_list)
+                            moves.append(((block, target), new_state_obj))
 
-                new_state_obj = BlocksState(new_state_list)
-                moves.append(((block, 0), new_state_obj))
+                # Klocki z innych klocków można przełożyć i na klocki i na stół
+                else:
+                    for target in free_blocks:
+                        if target != block:
+                            new_state_list = list(self.state)
+                            new_state_list[block - 1] = target
 
-            # Jeśli klocek leży na stole, można go przełożyć na dowolny wolny klocek.
-            if support == 0:
-                for target in free_blocks:
-                    if target != block:
-                        new_state_list = list(self.state)
-                        new_state_list[block - 1] = target
+                            new_state_obj = BlocksState(new_state_list)
+                            moves.append(((block, target), new_state_obj))
 
-                        new_state_obj = BlocksState(new_state_list)
-                        moves.append(((block, target), new_state_obj))
+                    # na stół
+                    new_state_list = list(self.state)
+                    new_state_list[block - 1] = 0
+                    new_state_obj = BlocksState(new_state_list)
+                    moves.append(((block, 0), new_state_obj))
+
+        # 2 dostępne ruchy
+        else:
+            # Sprawdzamy każdy wolny klocek
+            for block in free_blocks:
+                support = self.state[block - 1]
+
+                # Jeśli klocek leży na innym klocku, można przełożyć go na stół
+                if support != 0:
+                    new_state_list = list(self.state)
+                    new_state_list[block - 1] = 0
+
+                    new_state_obj = BlocksState(new_state_list)
+                    moves.append(((block, 0), new_state_obj))
+
+                # Jeśli klocek leży na stole, można go przełożyć na dowolny wolny klocek.
+                if support == 0:
+                    for target in free_blocks:
+                        if target != block:
+                            new_state_list = list(self.state)
+                            new_state_list[block - 1] = target
+
+                            new_state_obj = BlocksState(new_state_list)
+                            moves.append(((block, target), new_state_obj))
 
         return moves
 
