@@ -14,10 +14,22 @@ print("===dfs===")
 print(f"sekwencja:  {path}")
 print(f"ilość ruchów:  {len(path)}")
 print(f"przeszukanych węzłów: {nodes_extended}")
+# dfs 3moves
+path, nodes_extended = dfs_search(start_obj, target_obj, True)
+print("===dfs 3 moves===")
+print(f"sekwencja:  {path}")
+print(f"ilość ruchów:  {len(path)}")
+print(f"przeszukanych węzłów: {nodes_extended}")
 
 # bfs
-path, nodes_extended = bfs_search(start_obj, target_obj)
+path, nodes_extended = bfs_search(start_obj, target_obj, )
 print("===bfs===")
+print(f"sekwencja:  {path}")
+print(f"ilość ruchów:  {len(path)}")
+print(f"przeszukanych węzłów: {nodes_extended}")
+# bfs 3moves
+path, nodes_extended = bfs_search(start_obj, target_obj, True)
+print("===bfs 3 moves===")
 print(f"sekwencja:  {path}")
 print(f"ilość ruchów:  {len(path)}")
 print(f"przeszukanych węzłów: {nodes_extended}")

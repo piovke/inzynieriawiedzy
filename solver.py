@@ -3,7 +3,7 @@ from collections import deque
 
 # Funkcja implementująca algorytm DFS z backtrackingiem do rozwiązania problemu, jako argumenty przyjmuje tablicę
 # z układem początkowym i docelowym oraz limit węzłów.
-def dfs_search(start_state, target_state, node_limit=10000):
+def dfs_search(start_state, target_state, third_move=False, node_limit=10000):
     stack = [(start_state, [])]
     visited = {start_state}
     nodes_expanded = 0
@@ -19,7 +19,7 @@ def dfs_search(start_state, target_state, node_limit=10000):
 
         nodes_expanded += 1
 
-        for move, next_state in current_state.get_possible_moves():
+        for move, next_state in current_state.get_possible_moves(third_move=third_move):
             if next_state not in visited:
                 visited.add(next_state)
                 stack.append((next_state, path + [move]))
@@ -27,7 +27,7 @@ def dfs_search(start_state, target_state, node_limit=10000):
     return None, nodes_expanded
 
 
-def bfs_search(start_state, target_state, node_limit=10000):
+def bfs_search(start_state, target_state, third_move=False, node_limit=10000):
     visited = {start_state}
     nodes_expanded = 0
     stack = deque()
@@ -44,7 +44,7 @@ def bfs_search(start_state, target_state, node_limit=10000):
 
         nodes_expanded += 1
 
-        for move, next_state in current_state.get_possible_moves():
+        for move, next_state in current_state.get_possible_moves(third_move=third_move):
             if next_state not in visited:
                 visited.add(next_state)
                 stack.append([next_state, path + [move]])
