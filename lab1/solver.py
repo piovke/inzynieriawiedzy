@@ -1,6 +1,13 @@
 from collections import deque
 
 
+class SearchLimitExceeded(TimeoutError):
+    def __init__(self, nodes_expanded, max_lenstack):
+        super().__init__("Przekroczono limit węzłów.")
+        self.nodes_expanded = nodes_expanded
+        self.max_lenstack = max_lenstack
+
+
 # Porządkowanie ruchów: ruchy, które kładą klocek od razu na jego miejscu z układu docelowego,
 # są rozpatrywane jako pierwsze. Pozostałe zachowują kolejność z generatora (sortowanie jest stabilne).
 def order_moves(moves, target_state):
@@ -19,12 +26,12 @@ def dfs_search(start_state, target_state, third_move=False, node_limit=10000, or
         if len(stack) > max_lenstack:
             max_lenstack = len(stack)
         if nodes_expanded >= node_limit:
-            raise TimeoutError("Przekroczono limit węzłów.")
+            raise SearchLimitExceeded(nodes_expanded, max_lenstack)
 
         current_state, path = stack.pop()
 
         if current_state == target_state:
-            return path, nodes_expanded
+            return path, nodes_expanded, max_lenstack
 
         nodes_expanded += 1
 
@@ -51,7 +58,7 @@ def bfs_search(start_state, target_state, third_move=False, node_limit=10000):
         if len(stack) > max_lenstack:
             max_lenstack = len(stack)
         if nodes_expanded >= node_limit:
-            raise TimeoutError("Przekroczono limit węzłów.")
+            raise SearchLimitExceeded(nodes_expanded, max_lenstack)
 
         current_state, path = stack.popleft()
 
