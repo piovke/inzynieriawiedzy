@@ -20,7 +20,7 @@ def run(search, start, target, third_move):
     return path, nodes, time.perf_counter() - t, max_lenstack
 
 
-# Zadanie 4: DFS dla N = 3..15, po 5 układów
+# dfs
 for n in range(3, 10):
     for i in range(5):
         start = generate_state(n, SEED + 1000 * n + 10 * i)
@@ -37,7 +37,7 @@ for n in range(3, 10):
         verify_sequence(start, target, path, THIRD_MOVE)
 
 
-# Część 2, zadanie 3: DFS vs BFS, 10 problemów, N = 8, wariant rozszerzony
+# dfs vs bfs
 print("\n=== DFS vs BFS, N=8, 3 ruchy ===")
 sums = {"dfs": [0, 0, 0.0, 0, 0], "bfs": [0, 0, 0.0, 0, 0]}  # ruchy, węzły, czas, maks. stos, liczba rozwiązanych
 for i in range(10):
