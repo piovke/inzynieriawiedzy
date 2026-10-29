@@ -21,7 +21,7 @@ def run(search, start, target, third_move):
 
 
 # dfs
-for n in range(3, 10):
+for n in range(3, 16):
     for i in range(5):
         start = generate_state(n, SEED + 1000 * n + 10 * i)
         target = generate_state(n, SEED + 1000 * n + 10 * i + 1)
