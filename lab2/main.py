@@ -15,40 +15,70 @@ def normalize_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def normalize_version(ver: str) -> tuple:
-    """Sprowadza wersję do krotki, ignorując końcowe zera, np. 1.0.0 -> (1, 0)."""
+VERSION_RE = re.compile(r"^\d+(\.\d+)*$")
+
+
+def normalize_version(ver: str, path: str = None, line: int = None) -> tuple:
+    """Sprowadza wersję do krotki, ignorując końcowe zera, np. 1.0.0 -> (1,)."""
+    if not VERSION_RE.match(ver):
+        fail(f"Niepoprawna wersja '{ver}'", path, line)
     parts = [int(p) for p in ver.split(".")]
     while len(parts) > 1 and parts[-1] == 0:
         parts.pop()
     return tuple(parts)
 
 
+NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.\-]+)\s*(.*)$")
+CONSTRAINT_RE = re.compile(r"\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)*)\s*(?:,|\s|$)")
+
+
+def parse_constraints(rest: str):
+    """Zwraca listę (op, krotka_wersji) albo None, jeśli reszta tekstu jest niepoprawna."""
+    rest = rest.strip()
+    constraints, pos = [], 0
+    while pos < len(rest):
+        m = CONSTRAINT_RE.match(rest, pos)
+        if not m:
+            return None
+        constraints.append((m.group(1), normalize_version(m.group(2))))
+        pos = m.end()
+    return constraints
+
+
 class Requirement:
     """Parsuje pojedyncze wymaganie lub konflikt z uwzględnieniem alternatyw '|'."""
-    def __init__(self, text: str, current_pkg: str, path: str):
+
+    def __init__(self, text: str, current_pkg: str, path: str, line: int = None, allow_alt: bool = True):
         self.raw_text = text
         self.parsed = []
 
-        # Rozdziela tekst na części oddzielone znakiem alternatywy | a następnie iteruje po nich
+        if not allow_alt and "|" in text:
+            fail("Konflikt nie może zawierać alternatywy '|'", path, line)
+
         for alt in text.split("|"):
-            tokens = alt.strip().split()
-            if not tokens:
-                fail("Puste wymaganie", path)
+            m = NAME_RE.match(alt)
+            if not m:
+                fail("Puste lub niepoprawne wymaganie", path, line)
 
-            target = normalize_name(tokens[0])
+            target = normalize_name(m.group(1))
+            constraints = parse_constraints(m.group(2))
+            if constraints is None:
+                fail(f"Niepoprawne ograniczenie wersji w '{alt.strip()}'", path, line)
             if target == current_pkg:
-                fail("Pakiet nie może wymagać ani konfliktować z samym sobą", path)
+                fail("Pakiet nie może wymagać ani konfliktować z samym sobą", path, line)
 
-            ops = re.findall(r"(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)*)", " ".join(tokens[1:]))
-            constraints = [(op, normalize_version(v)) for op, v in ops]
             self.parsed.append((target, constraints))
 
 
+NAME_VALID_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
+
+
 class Repository:
-    """Wczytuje i przechowuje bazę wiedzy o repozytorium."""
+    """Wczytuje, waliduje i przechowuje bazę wiedzy o repozytorium."""
     def __init__(self, filepath: str):
         self.packages = {}
         self._load(filepath)
+        self._warn_unmatched()
 
     def _load(self, filepath: str):
         def check_dups(pairs):
@@ -62,45 +92,77 @@ class Repository:
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.loads(f.read(), object_pairs_hook=check_dups)
+        except OSError as e:
+            fail(f"Nie można otworzyć pliku: {e}")
         except json.JSONDecodeError as e:
             fail(e.msg, line=e.lineno)
         except ValueError as e:
             fail(str(e))
 
+        # --- korzeń dokumentu ---
+        if not isinstance(data, dict):
+            fail("Korzeń dokumentu musi być obiektem", "$")
+        for key in data:
+            if key not in ("meta", "packages"):
+                fail(f"Nieznane pole '{key}'", "$")
         if "packages" not in data:
             fail("Brak pola 'packages'", "$")
+        if not isinstance(data["packages"], dict):
+            fail("Pole 'packages' musi być obiektem", "packages")
 
-
-        # Iteracja po każdym pakiecie w pliku, sprawdzenie czy po normalizacji nie ma duplikatów
-        # oraz czy każdy pakiet ma wymagane pola (versions)
+        # --- pakiety ---
         for pkg_name, pkg_data in data["packages"].items():
-            pkg_key = normalize_name(pkg_name)
             pkg_path = f"packages['{pkg_name}']"
 
+            if not NAME_VALID_RE.match(pkg_name):
+                fail(f"Niepoprawna nazwa pakietu '{pkg_name}'", pkg_path)
+            pkg_key = normalize_name(pkg_name)
             if pkg_key in self.packages:
                 fail(f"Duplikat pakietu '{pkg_name}'", pkg_path)
 
-            self.packages[pkg_key] = {}
-
+            if not isinstance(pkg_data, dict):
+                fail("Pakiet musi być obiektem", pkg_path)
+            for key in pkg_data:
+                if key != "versions":
+                    fail(f"Nieznane pole '{key}'", pkg_path)
             if "versions" not in pkg_data:
                 fail("Brak pola 'versions'", f"{pkg_path}.versions")
+            if not isinstance(pkg_data["versions"], dict):
+                fail("Pole 'versions' musi być obiektem", f"{pkg_path}.versions")
 
-            # Iteruje przez wszystkie wpisane wersje pakietu, normalizuje i sprawdza czy nie ma duplikatów. Następnie
-            # tworzy listy obiektów wymagań/konfliktów. Na końcu zapisuje w słowniku
+            self.packages[pkg_key] = {}
+
+            # --- wersje ---
             for ver_str, ver_data in pkg_data["versions"].items():
-                ver_key = normalize_version(ver_str)
                 path = f"{pkg_path}.versions['{ver_str}']"
+                ver_key = normalize_version(ver_str, path)
 
                 if ver_key in self.packages[pkg_key]:
                     fail(f"Duplikat wersji '{ver_str}'", path)
 
+                if not isinstance(ver_data, dict):
+                    fail("Wersja musi być obiektem", path)
+                for key in ver_data:
+                    if key not in ("requires", "conflicts"):
+                        fail(f"Nieznane pole '{key}'", path)
+
+                lists = {}
+                for field in ("requires", "conflicts"):
+                    items = ver_data.get(field, [])
+                    if not isinstance(items, list):
+                        fail(f"Pole '{field}' musi być listą napisów", f"{path}.{field}")
+                    for i, item in enumerate(items):
+                        if not isinstance(item, str):
+                            fail("Element musi być napisem", f"{path}.{field}[{i}]")
+                    lists[field] = items
+
                 reqs = [
                     Requirement(r, pkg_key, f"{path}.requires[{i}]")
-                    for i, r in enumerate(ver_data.get("requires", []))
+                    for i, r in enumerate(lists["requires"])
                 ]
                 confs = [
-                    Requirement(c, pkg_key, f"{path}.conflicts[{i}]")
-                    for i, c in enumerate(ver_data.get("conflicts", []))
+                    Requirement(c, pkg_key, f"{path}.conflicts[{i}]", allow_alt=False)
+                    for i, c in enumerate(lists["conflicts"])
                 ]
 
                 self.packages[pkg_key][ver_key] = {
@@ -109,6 +171,19 @@ class Repository:
                     "conflicts": confs
                 }
 
+    def _warn_unmatched(self):
+        """Ostrzega o wymaganiach i konfliktach, którym nie odpowiada żadna wersja w repo."""
+        for pkg, versions in self.packages.items():
+            for ver_data in versions.values():
+                raw_v = ver_data["raw_version"]
+                for req in ver_data["requires"]:
+                    if not any(get_matching_versions(self, p, c) for p, c in req.parsed):
+                        print(f"Ostrzeżenie: Wymaganie '{req.raw_text}' dla {pkg}=={raw_v} "
+                              "nie pasuje do żadnej wersji w repozytorium.")
+                for conf in ver_data["conflicts"]:
+                    if not any(get_matching_versions(self, p, c) for p, c in conf.parsed):
+                        print(f"Ostrzeżenie: Konflikt '{conf.raw_text}' dla {pkg}=={raw_v} "
+                              "nie pasuje do żadnej wersji w repozytorium.")
 
 class State:
     """Przechowuje zainstalowany stan środowiska."""
@@ -200,11 +275,6 @@ class KnowledgeBase:
                     for alt_pkg, constraints in req.parsed:
                         matches = get_matching_versions(self.repo, alt_pkg, constraints)
                         alt_vars.extend([self.x[m] for m in matches])
-
-                    # Jeśli nie ma odpowiednika w repozytorium
-                    if not alt_vars:
-                        print(f"Ostrzeżenie: Wymaganie '{req.raw_text}' dla {pkg_name}=={raw_v} "
-                              "nie pasuje do żadnej wersji w repozytorium.")
 
                     self._add_axiom(
                         z3.Implies(p_v_var, z3.Or(*alt_vars)),

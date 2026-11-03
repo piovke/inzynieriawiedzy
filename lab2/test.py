@@ -1,6 +1,7 @@
-from main import Repository, KnowledgeBase
+from main import Repository, KnowledgeBase, State
 from zadanie3 import Installer, Requirement
 from verify import *
+
 
 # Inicjalizujemy klasy z Zadania 1 i 2
 repo = Repository("k21/repo_10.json")

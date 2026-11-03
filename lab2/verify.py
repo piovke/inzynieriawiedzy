@@ -33,7 +33,7 @@ def verify_state(repo, state, requests=None) -> bool:
         # Wszystkie ograniczenia nałożone na ten konkretny pakiet muszą być spełnione
         return all(version_matches(inst_ver_tuple, op, tgt) for op, tgt in constraints)
 
-    # 1. Sprawdzenie, czy każda zainstalowana wersja w ogóle istnieje w repozytorium
+    # Sprawdzenie, czy każda zainstalowana wersja w ogóle istnieje w repozytorium
     for pkg, (raw_ver, ver_tuple, is_manual) in state.installed.items():
         if pkg not in repo.packages:
             violations.append(f"Zainstalowany pakiet '{pkg}' nie istnieje w repozytorium.")
@@ -41,9 +41,9 @@ def verify_state(repo, state, requests=None) -> bool:
         if ver_tuple not in repo.packages[pkg]:
             violations.append(f"Zainstalowana wersja '{raw_ver}' pakietu '{pkg}' nie istnieje w repozytorium.")
 
-    # 2 & 3. Weryfikacja wymagań i konfliktów dla każdego zainstalowanego pakietu
+    # Weryfikacja wymagań i konfliktów dla każdego zainstalowanego pakietu
     for pkg, (raw_ver, ver_tuple, _) in state.installed.items():
-        # Zabezpieczenie przed błędem, gdy pakietu nie ma w repozytorium (zgłoszone wyżej)
+        # Zabezpieczenie przed błędem, gdy pakietu nie ma w repozytorium
         if pkg not in repo.packages or ver_tuple not in repo.packages[pkg]:
             continue
 
@@ -69,7 +69,7 @@ def verify_state(repo, state, requests=None) -> bool:
                 if is_alternative_satisfied(alt_pkg, constraints):
                     conflicting_ver = state.installed[alt_pkg][0]
                     violations.append(
-                        f"Konflikt! {pkg}=={raw_ver} wyklucza się z zainstalowanym {alt_pkg}=={conflicting_ver} "
+                        f"Konflikt: {pkg}=={raw_ver} wyklucza się z zainstalowanym {alt_pkg}=={conflicting_ver} "
                         f"(naruszona reguła: {conf.raw_text})."
                     )
 
@@ -87,12 +87,10 @@ def verify_state(repo, state, requests=None) -> bool:
 
     # Podsumowanie i wypisanie wyników
     if violations:
-        print("\n[WERYFIKACJA ZAKOŃCZONA NIEPOWODZENIEM]")
         print("Znaleziono następujące naruszenia spójności środowiska:")
         for v in violations:
             print(f" ❌ {v}")
         return False
 
-    print("\n[WERYFIKACJA ZAKOŃCZONA SUKCESEM]")
-    print(" ✅ Stan środowiska jest w 100% spójny.")
+    print("Stan środowiska jest w 100% spójny.")
     return True

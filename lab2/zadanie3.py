@@ -2,12 +2,12 @@ import z3
 from main import *
 
 class Installer:
-    """Odpowiada za znalezienie optymalnego środowiska spełniającego żądania[cite: 4]."""
+    """Odpowiada za znalezienie optymalnego środowiska spełniającego żądania."""
 
     def __init__(self, repo):
         self.repo = repo
         self.opt = z3.Optimize()
-        self.opt.set(priority="lex")  # Optymalizacja leksykograficzna[cite: 6]
+        self.opt.set(priority="lex")  # Optymalizacja leksykograficzna
 
         self.x = {}
         self.out_of_date = {}  # Przechowuje indeks przestarzałości dla (pakiet, krotka_wersji)
@@ -16,9 +16,9 @@ class Installer:
         self._add_axioms()
 
     def _init_variables(self):
-        """Tworzy zmienne logiczne i wylicza przestarzałość wersji[cite: 1, 6]."""
+        """Tworzy zmienne logiczne i wylicza przestarzałość wersji."""
         for pkg, pkg_data in self.repo.packages.items():
-            # Sortowanie malejąco wg krotek daje najnowszą wersję na indeksie 0[cite: 1]
+            # Sortowanie malejąco wg krotek daje najnowszą wersję na indeksie 0
             sorted_vers = sorted(pkg_data.keys(), reverse=True)
             for idx, ver_tuple in enumerate(sorted_vers):
                 raw_v = pkg_data[ver_tuple]["raw_version"]
@@ -26,9 +26,9 @@ class Installer:
                 self.out_of_date[(pkg, ver_tuple)] = idx
 
     def _add_axioms(self):
-        """Kopiuje zasady A1, A2, A3 z bazy wiedzy do optymalizatora[cite: 4, 6]."""
+        """Kopiuje zasady A1, A2, A3 z bazy wiedzy do optymalizatora."""
         for pkg, pkg_data in self.repo.packages.items():
-            # (A1) Maksymalnie jedna wersja pakietu[cite: 4, 6]
+            # (A1) Maksymalnie jedna wersja pakietu
             vars_p = [self.x[(pkg, v)] for v in pkg_data.keys()]
             if vars_p:
                 self.opt.add(z3.AtMost(*vars_p, 1))
@@ -36,7 +36,7 @@ class Installer:
             for ver, ver_data in pkg_data.items():
                 var_pv = self.x[(pkg, ver)]
 
-                # (A2) Zależności[cite: 4, 6]
+                # (A2) Zależności
                 for req in ver_data["requires"]:
                     alt_vars = []
                     for alt_pkg, constraints in req.parsed:
@@ -44,7 +44,7 @@ class Installer:
                         alt_vars.extend([self.x[m] for m in matches])
                     self.opt.add(z3.Implies(var_pv, z3.Or(*alt_vars)))
 
-                # (A3) Konflikty[cite: 4, 6]
+                # (A3) Konflikty
                 for conf in ver_data["conflicts"]:
                     for alt_pkg, constraints in conf.parsed:
                         matches = get_matching_versions(self.repo, alt_pkg, constraints)
@@ -53,14 +53,14 @@ class Installer:
                             self.opt.add(z3.Implies(var_pv, z3.Not(z3.Or(*conf_vars))))
 
     def install(self, requests_list):
-        """Znajduje rozwiązanie dla żądań R do pustego środowiska[cite: 4]."""
+        """Znajduje rozwiązanie dla żądań R do pustego środowiska."""
         requested_packages = set()
 
-        # 1. WYMUSZENIE INSTALACJI ŻĄDANYCH PAKIETÓW
+        # WYMUSZENIE INSTALACJI ŻĄDANYCH PAKIETÓW
         for req in requests_list:
             req_vars = []
             for alt_pkg, constraints in req.parsed:
-                requested_packages.add(alt_pkg)  # Zapamiętujemy, o jakie pakiety prosił user
+                requested_packages.add(alt_pkg)
                 matches = get_matching_versions(self.repo, alt_pkg, constraints)
                 req_vars.extend([self.x[m] for m in matches])
 
@@ -68,12 +68,12 @@ class Installer:
                 print(f"Błąd: Żądanie '{req.raw_text}' nie odpowiada żadnej wersji w repo.")
                 return None
 
-            # Wymagamy, aby przynajmniej jedna zmienna pasująca do żądania była prawdą[cite: 6]
+            # Wymagamy, aby przynajmniej jedna zmienna pasująca do żądania była prawdą
             self.opt.add(z3.Or(*req_vars))
 
-        # 2. DEFINIOWANIE KRYTERIÓW OPTYMALIZACJI (LEKSYKOGRAFICZNIE)[cite: 4]
+        # DEFINIOWANIE KRYTERIÓW OPTYMALIZACJI
 
-        # Kryterium 1: minimalna przestarzałość pakietów żądanych[cite: 4]
+        # K1: minimalna przestarzałość pakietów żądanych
         c1_terms = []
         for pkg in requested_packages:
             if pkg in self.repo.packages:
@@ -81,18 +81,18 @@ class Installer:
                     c1_terms.append(z3.If(self.x[(pkg, ver)], self.out_of_date[(pkg, ver)], 0))
         self.opt.minimize(z3.Sum(c1_terms) if c1_terms else 0)
 
-        # Kryterium 2: minimalna liczba zainstalowanych pakietów[cite: 4, 7]
+        # K2: minimalna liczba zainstalowanych pakietów
         c2_terms = [z3.If(var, 1, 0) for var in self.x.values()]
         self.opt.minimize(z3.Sum(c2_terms) if c2_terms else 0)
 
-        # Kryterium 3: minimalna przestarzałość pozostałych pakietów[cite: 4]
+        # K3: minimalna przestarzałość pozostałych pakietów
         c3_terms = []
         for (pkg, ver), var in self.x.items():
             if pkg not in requested_packages:
                 c3_terms.append(z3.If(var, self.out_of_date[(pkg, ver)], 0))
         self.opt.minimize(z3.Sum(c3_terms) if c3_terms else 0)
 
-        # 3. ROZWIĄZANIE I ZWRÓCENIE WYNIKU
+        # ROZWIĄZANIE I ZWRÓCENIE WYNIKU
         if self.opt.check() == z3.sat:
             m = self.opt.model()
             installed = []
@@ -105,6 +105,5 @@ class Installer:
                 print(f" + {p}")
             return installed
         else:
-            # Komunikat o braku rozwiązania zgodnie z wymogiem[cite: 4]
             print("Brak rozwiązania")
             return None
